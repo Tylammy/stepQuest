@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "80550265346",
+    "project_id": "stepquest-e2cbc",
+    "storage_bucket": "stepquest-e2cbc.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:80550265346:android:96754fba9cada51fc15d1b",
+        "android_client_info": {
+          "package_name": "com.example.stepquest"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBrNFfeyPFVQNkqgEWUo6RDyiqrIxQKrJA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
