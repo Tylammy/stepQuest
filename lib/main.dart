@@ -141,10 +141,11 @@ class _CharacterCreationScreenState extends State<CharacterCreationScreen> {
 
             const SizedBox(height: 40),
 
-            // Temporary "Save Character" button, this just shows the entered info in a pop-up box
+
+            // Save Character button - writes to Firestore
             ElevatedButton(
-              onPressed: () {
-                final name = _nameController.text;
+              onPressed: () async {
+                final name = _nameController.text.trim();
 
                 // Name can't be empty
                 if (name.isEmpty) {
@@ -156,20 +157,32 @@ class _CharacterCreationScreenState extends State<CharacterCreationScreen> {
                   return;
                 }
 
-                // Shows confirmation
-                showDialog(
-                  context: context,
-                  builder: (_) => AlertDialog(
-                    title: const Text("Character Created!"),
-                    content: Text("Name: $name\nClass: $selectedClass"),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text("OK"),
-                      ),
-                    ],
-                  ),
-                );
+                try {
+                  // Write a new document into the "users" collection
+                  await FirebaseFirestore.instance.collection('users').add({
+                    'name': name,
+                    'class': selectedClass,
+                    'xp': 0,
+                    'level': 1,
+                    'createdAt': FieldValue.serverTimestamp(),
+                  });
+
+                  // Success message
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Character saved to Firestore!"),
+                    ),
+                  );
+
+                  // Go back to the previous screen
+                  Navigator.pop(context);
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text("Error saving character: $e"),
+                    ),
+                  );
+                }
               },
               child: const Text("Save Character"),
             ),
