@@ -31,12 +31,10 @@ class StepQuestApp extends StatelessWidget {
 /// ------------------------------------------------------------
 /// WEEK 1: CHARACTER LIST SCREEN
 /// ------------------------------------------------------------
-/// This screen will eventually:
-///  - Display all characters the user has created
-///  - Allow selecting/editing characters
-///  - Provide a button to create a new character
-///
-/// This is a placeholder with a "Create Character" button.
+/// - Reads all characters from the "characters" collection
+///   in Firestore.
+/// - Lets the user tap on a character to open the StepTrackerScreen
+///   for that specific character (steps and XP saved per character).
 class CharacterListScreen extends StatelessWidget {
   const CharacterListScreen({super.key});
 
@@ -46,42 +44,94 @@ class CharacterListScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text("Characters"),
       ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text(
-              "No characters yet!",
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              "Create your first hero to begin your adventure.",
-              style: TextStyle(fontSize: 15),
-            ),
-            const SizedBox(height: 24),
+      body: Column(
+        children: [
+          Expanded(
+            // StreamBuilder show characters from Firestore
+            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('characters')
+                  .orderBy('createdAt', descending: false)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-            // Navigates to the Character Creation Screen
-            ElevatedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    // Creates and displays the CharacterCreationScreen
-                    builder: (context) => const CharacterCreationScreen(),
-                  ),
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Text('Error: ${snapshot.error}'),
+                  );
+                }
+
+                final docs = snapshot.data?.docs ?? [];
+
+                if (docs.isEmpty) {
+                  return const Center(
+                    child: Text(
+                      "No characters yet.\nTap the button below to create one.",
+                      textAlign: TextAlign.center,
+                    ),
+                  );
+                }
+
+                return ListView.builder(
+                  itemCount: docs.length,
+                  itemBuilder: (context, index) {
+                    final doc = docs[index];
+                    final data = doc.data();
+                    final name = (data['name'] ?? 'Unknown') as String;
+                    final charClass = (data['class'] ?? 'Unknown') as String;
+                    final xp = (data['xp'] ?? 0) as int;
+                    final level = (data['level'] ?? 1) as int;
+
+                    return ListTile(
+                      title: Text(name),
+                      subtitle: Text('$charClass • Level $level • $xp XP'),
+                      // Tap a character to "play" as that character
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => StepTrackerScreen(
+                              characterRef: doc.reference,
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
                 );
               },
-              child: const Text("Create Character"),
             ),
-          ],
-        ),
+          ),
+
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const CharacterCreationScreen(),
+                    ),
+                  );
+                },
+                child: const Text("Create Character"),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
 /// Character Creation Screen
+/// - Saves a new character document into
+///   the "characters" collection in Firestore.
 class CharacterCreationScreen extends StatefulWidget {
   const CharacterCreationScreen({super.key});
 
@@ -147,7 +197,6 @@ class _CharacterCreationScreenState extends State<CharacterCreationScreen> {
               onPressed: () async {
                 final name = _nameController.text.trim();
 
-                // Name can't be empty
                 if (name.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
@@ -158,16 +207,16 @@ class _CharacterCreationScreenState extends State<CharacterCreationScreen> {
                 }
 
                 try {
-                  // Write a new document into the "users" collection
-                  await FirebaseFirestore.instance.collection('users').add({
+                  // Write a new document into the "characters" collection
+                  await FirebaseFirestore.instance.collection('characters').add({
                     'name': name,
                     'class': selectedClass,
                     'xp': 0,
+                    'steps': 0,
                     'level': 1,
                     'createdAt': FieldValue.serverTimestamp(),
                   });
 
-                  // Success message
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text("Character saved to Firestore!"),
@@ -186,6 +235,97 @@ class _CharacterCreationScreenState extends State<CharacterCreationScreen> {
               },
               child: const Text("Save Character"),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+
+// ---------------------------------
+// WEEK 2: STEP TRACKING INTEGRATION
+// ---------------------------------
+
+/// - Takes a DocumentReference for a specific character.
+/// - Shows that character's steps, XP, and level.
+/// - Button adds 100 steps and 10 XP to THAT character only.
+
+class StepTrackerScreen extends StatelessWidget {
+  // reference to the chosen character document
+  final DocumentReference<Map<String, dynamic>> characterRef;
+
+  const StepTrackerScreen({super.key, required this.characterRef});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Step Tracker'),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+              stream: characterRef.snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                final data = snapshot.data?.data() ?? {};
+                final name = (data['name'] ?? 'Unknown') as String;
+                final charClass = (data['class'] ?? 'Unknown') as String;
+                final steps = (data['steps'] ?? 0) as int;
+                final xp = (data['xp'] ?? 0) as int;
+                final level = (data['level'] ?? 1) as int;
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '$name the $charClass',
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text('Steps: $steps', style: const TextStyle(fontSize: 18)),
+                    const SizedBox(height: 4),
+                    Text('XP: $xp'),
+                    Text('Level: $level'),
+                    const SizedBox(height: 24),
+                  ],
+                );
+              },
+            ),
+
+            const Spacer(),
+
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () async {
+                  // +100 steps and +10 XP each tap.
+                  // SetOptions(merge: true) so other fields are kept.
+                  await characterRef.set({
+                    'steps': FieldValue.increment(100),
+                    'xp': FieldValue.increment(10),
+                  }, SetOptions(merge: true));
+                },
+                child: const Text('Add 100 Steps (and 10 XP)'),
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Each tap updates this character\'s steps and XP.\n'
+              'You can create multiple characters and track them separately.',
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
           ],
         ),
       ),
