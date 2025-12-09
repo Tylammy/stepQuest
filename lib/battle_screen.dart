@@ -86,7 +86,9 @@ class _BattleScreenState extends State<BattleScreen> {
                         if (enemyHp <= 0) {
                           try {
                             await widget.characterRef.set(
-                              {'xp': FieldValue.increment(xpReward)},
+                              {'xp': FieldValue.increment(xpReward),
+                              // Progress for Quest 3 (defeat 5 monsters)
+                              'dailyMonsterProgress': FieldValue.increment(1),},
                               SetOptions(merge: true),
                             );
 
