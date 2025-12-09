@@ -4,6 +4,7 @@ import 'firebase_options.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'battle_screen.dart';
+import 'daily_quest_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -315,11 +316,31 @@ class StepTrackerScreen extends StatelessWidget {
                   await characterRef.set({
                     'steps': FieldValue.increment(100),
                     'xp': FieldValue.increment(10),
+                    'dailyProgress': FieldValue.increment(100),
+                    'dailyQ2Progress': FieldValue.increment(100),
                   }, SetOptions(merge: true));
                 },
                 child: const Text('Add 100 Steps (and 10 XP)'),
               ),
             ),
+            // Daily Quest screen
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => DailyQuestScreen(
+                        characterRef: characterRef, // pass the same character
+                      ),
+                    ),
+                  );
+                },
+                child: const Text('View Daily Quest'),
+              ),
+            ),
+            // Battle screen
             const SizedBox(height: 8),
             OutlinedButton(
               onPressed: () {
