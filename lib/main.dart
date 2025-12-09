@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'battle_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -319,6 +320,21 @@ class StepTrackerScreen extends StatelessWidget {
                 child: const Text('Add 100 Steps (and 10 XP)'),
               ),
             ),
+            const SizedBox(height: 8),
+            OutlinedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => BattleScreen(
+                      characterRef: characterRef,  // keeps XP tied to this character
+                    ),
+                  ),
+                );
+              },
+              child: const Text('Go to Battle'),
+            ),
+
             const SizedBox(height: 8),
             const Text(
               'Each tap updates this character\'s steps and XP.\n'
