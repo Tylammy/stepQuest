@@ -27,7 +27,33 @@ class StepQuestApp extends StatelessWidget {
       title: 'StepQuest',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
-        useMaterial3: true,),
+        useMaterial3: true,
+        
+        scaffoldBackgroundColor: const Color(0xFFF4F5FF),
+
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.indigo,
+          foregroundColor: Colors.white,
+          centerTitle: true,
+          elevation: 2,
+        ),
+
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+          ),
+        ),
+      ),
       home: const CharacterListScreen(),
     );
   }
@@ -51,6 +77,19 @@ class CharacterListScreen extends StatelessWidget {
       ),
       body: Column(
         children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Your party',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
           Expanded(
             // StreamBuilder show characters from Firestore
             child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -90,20 +129,47 @@ class CharacterListScreen extends StatelessWidget {
                     final xp = (data['xp'] ?? 0) as int;
                     final level = (data['level'] ?? 1) as int;
 
-                    return ListTile(
-                      title: Text(name),
-                      subtitle: Text('$charClass • Level $level • $xp XP'),
-                      // Tap a character to "play" as that character
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => StepTrackerScreen(
-                              characterRef: doc.reference,
+                    final String initial =
+                      name.isNotEmpty ? name[0].toUpperCase() : '?';
+
+                    return Card(
+                      // Card for each character
+                      margin: const EdgeInsets.only(bottom: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      elevation: 2,
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          // Avatar with initial
+                          radius: 22,
+                          backgroundColor: Colors.indigo.shade100,
+                          child: Text(
+                            initial,
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
-                        );
-                      },
+                        ),
+                        title: Text(
+                          name,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        subtitle: Text('$charClass • Lv $level • $xp XP'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  StepTrackerScreen(characterRef: doc.reference),
+                            ),
+                          );
+                        },
+                      ),
                     );
                   },
                 );
