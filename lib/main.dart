@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
@@ -5,6 +6,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'battle_screen.dart';
 import 'daily_quest_screen.dart';
+import 'package:pedometer/pedometer.dart';
+
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -246,18 +249,89 @@ class _CharacterCreationScreenState extends State<CharacterCreationScreen> {
 
 
 // ---------------------------------
-// WEEK 2: STEP TRACKING INTEGRATION
+// STEP TRACKING INTEGRATION
 // ---------------------------------
+/// - Listens to device step sensor using the `pedometer` package.
+/// - Each new step increments `steps`, `xp`, and daily step quests in Firestore.
+/// - Also keeps the manual "Add 100 Steps" button as a fallback.
 
-/// - Takes a DocumentReference for a specific character.
-/// - Shows that character's steps, XP, and level.
-/// - Button adds 100 steps and 10 XP to THAT character only.
-
-class StepTrackerScreen extends StatelessWidget {
-  // reference to the chosen character document
+class StepTrackerScreen extends StatefulWidget {
   final DocumentReference<Map<String, dynamic>> characterRef;
 
   const StepTrackerScreen({super.key, required this.characterRef});
+
+  @override
+  State<StepTrackerScreen> createState() => _StepTrackerScreenState();
+}
+
+class _StepTrackerScreenState extends State<StepTrackerScreen> {
+  Stream<StepCount>? _stepCountStream;
+  StreamSubscription<StepCount>? _stepSub;
+
+  int? _lastSensorValue;
+  String _pedometerStatus = 'Not started';
+
+  @override
+  void initState() {
+    super.initState();
+    _initPedometer();             // start listening when screen opens
+  }
+
+  Future<void> _initPedometer() async {
+    try {
+      _stepCountStream = Pedometer.stepCountStream;
+      _stepSub = _stepCountStream!.listen(
+        _onStepData,
+        onError: _onStepError,
+      );
+
+      setState(() {
+        _pedometerStatus = 'Listening for steps...';
+      });
+    } catch (e) {
+      setState(() {
+        _pedometerStatus = 'Pedometer error: $e';
+      });
+    }
+  }
+
+  // Called every time the OS reports a new total step count
+  Future<void> _onStepData(StepCount event) async {
+    final int sensorSteps = event.steps;
+
+    // First reading: just store it, no updates
+    if (_lastSensorValue == null) {
+      _lastSensorValue = sensorSteps;
+      return;
+    }
+
+    final int delta = sensorSteps - _lastSensorValue!;
+    _lastSensorValue = sensorSteps;
+
+    if (delta <= 0) return;
+
+    // Apply the new steps to Firestore
+    await widget.characterRef.set({
+      'steps': FieldValue.increment(delta),
+      'xp': FieldValue.increment(delta),
+      // keep daily quests in sync (step-based quests)
+      'dailyQ1Progress': FieldValue.increment(delta),
+      'dailyQ2Progress': FieldValue.increment(delta),
+    }, SetOptions(merge: true));
+    // UI uses a StreamBuilder on Firestore, so it will update itself.
+  }
+
+  void _onStepError(error) {
+    setState(() {
+      _pedometerStatus = 'Pedometer not available';
+    });
+  }
+
+  @override
+  void dispose() {
+    _stepSub?.cancel(); // stop listening when leaving screen
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -271,7 +345,7 @@ class StepTrackerScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-              stream: characterRef.snapshots(),
+              stream: widget.characterRef.snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
@@ -299,6 +373,11 @@ class StepTrackerScreen extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text('XP: $xp'),
                     Text('Level: $level'),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Pedometer: $_pedometerStatus',
+                      style: const TextStyle(fontSize: 12),
+                    ),
                     const SizedBox(height: 24),
                   ],
                 );
@@ -313,7 +392,7 @@ class StepTrackerScreen extends StatelessWidget {
                 onPressed: () async {
                   // +100 steps and +10 XP each tap.
                   // SetOptions(merge: true) so other fields are kept.
-                  await characterRef.set({
+                  await widget.characterRef.set({
                     'steps': FieldValue.increment(100),
                     'xp': FieldValue.increment(10),
                     'dailyProgress': FieldValue.increment(100),
@@ -332,7 +411,7 @@ class StepTrackerScreen extends StatelessWidget {
                     context,
                     MaterialPageRoute(
                       builder: (_) => DailyQuestScreen(
-                        characterRef: characterRef, // pass the same character
+                        characterRef: widget.characterRef, // pass the same character
                       ),
                     ),
                   );
@@ -348,7 +427,7 @@ class StepTrackerScreen extends StatelessWidget {
                   context,
                   MaterialPageRoute(
                     builder: (_) => BattleScreen(
-                      characterRef: characterRef,  // keeps XP tied to this character
+                      characterRef: widget.characterRef,  // keeps XP tied to this character
                     ),
                   ),
                 );
