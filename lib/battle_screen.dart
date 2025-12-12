@@ -1,5 +1,7 @@
+// lib/battle_screen.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'utils/leveling.dart'; // our leveling utility
 
 /// --------------------------------------
 /// BATTLE & ENCOUNTER SYSTEM
@@ -50,13 +52,14 @@ class _BattleScreenState extends State<BattleScreen> {
             ),
             const SizedBox(height: 8),
             Center(
-            child: Image.asset(
+              child: Image.asset(
                 'lib/assets/images/slime.png',
                 height: 150,
-            ),
+              ),
             ),
             const SizedBox(height: 16),
 
+            // Enemy HP bar
             LinearProgressIndicator(
               value: hpPercent.clamp(0.0, 1.0),
               minHeight: 16,
@@ -64,54 +67,58 @@ class _BattleScreenState extends State<BattleScreen> {
             const SizedBox(height: 4),
             Text('HP: $enemyHp / $enemyMaxHp'),
             const SizedBox(height: 24),
+
+            // Battle instructions
             const Text(
               'Tap "Attack" to damage the enemy.\nDefeating the enemy gives +20 XP.',
             ),
             const Spacer(),
 
+            // Attack button
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: isAttacking
                     ? null
                     : () async {
-                        // Deal damage
+                        // Deal damage to the enemy
                         setState(() {
                           enemyHp -= damagePerHit;
                           if (enemyHp < 0) enemyHp = 0;
                           isAttacking = true;
                         });
 
-                        // If defeated → add XP
+                        // If enemy is defeated → award XP
                         if (enemyHp <= 0) {
                           try {
-                            await widget.characterRef.set(
-                              {'xp': FieldValue.increment(xpReward),
-                              // Progress for Quest 3 (defeat 5 monsters)
-                              'dailyMonsterProgress': FieldValue.increment(1),},
-                              SetOptions(merge: true),
+                            // Use leveling.dart to award XP and handle level-ups
+                            final result = await widget.characterRef
+                                .awardXpAndMaybeLevelUp(
+                              xpReward,
+                              increments: {'dailyMonsterProgress': 1},
                             );
+
+                            final leveled = result['leveled'] as bool;
 
                             if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: Text(
-                                    '$enemyName defeated! +$xpReward XP gained.',
+                                    '$enemyName defeated! +$xpReward XP'
+                                    '${leveled ? ' and leveled up!' : ''}',
                                   ),
                                 ),
                               );
                             }
 
-                            // Reset for next battle
+                            // Reset enemy HP for next battle
                             setState(() {
                               enemyHp = enemyMaxHp;
                             });
                           } catch (e) {
                             if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text("Error: $e"),
-                                ),
+                                SnackBar(content: Text('Error: $e')),
                               );
                             }
                           }

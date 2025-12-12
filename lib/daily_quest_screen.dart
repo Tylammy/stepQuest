@@ -1,5 +1,7 @@
+// lib/daily_quest_screen.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'utils/leveling.dart'; // Leveling & XP helper
 
 /// ------------------------------------------------------------
 /// DAILY QUEST SCREEN (3 simple quests)
@@ -24,7 +26,7 @@ class _DailyQuestScreenState extends State<DailyQuestScreen> {
   static const int _monsterGoal = 5;
 
   static const int _q1Reward = 50;       // XP for Quest 1
-  static const int _q2Reward = 100;       // XP for Quest 2
+  static const int _q2Reward = 100;      // XP for Quest 2
   static const int _monsterReward = 70;  // XP for Quest 3
 
   bool _initialized = false;
@@ -97,34 +99,30 @@ class _DailyQuestScreenState extends State<DailyQuestScreen> {
 
             // Quest 1 values
             final int q1Goal = (data['dailyQ1Goal'] ?? _q1Goal) as int;
-            final int q1Progress =
-                (data['dailyProgress'] ?? 0) as int;
-            final bool q1Claimed =
-                (data['dailyQ1RewardClaimed'] ?? false) as bool;
+            final int q1Progress = (data['dailyProgress'] ?? 0) as int;
+            final bool q1Claimed = (data['dailyQ1RewardClaimed'] is bool)
+                ? data['dailyQ1RewardClaimed'] as bool
+                : (data['dailyQ1RewardClaimed'] == 1);
             final bool q1Done = q1Progress >= q1Goal;
-            final double q1Pct =
-                q1Goal > 0 ? (q1Progress / q1Goal).clamp(0.0, 1.0) : 0.0;
+            final double q1Pct = q1Goal > 0 ? (q1Progress / q1Goal).clamp(0.0, 1.0) : 0.0;
 
             // Quest 2 values
             final int q2Goal = (data['dailyQ2Goal'] ?? _q2Goal) as int;
-            final int q2Progress =
-                (data['dailyQ2Progress'] ?? 0) as int;
-            final bool q2Claimed =
-                (data['dailyQ2RewardClaimed'] ?? false) as bool;
+            final int q2Progress = (data['dailyQ2Progress'] ?? 0) as int;
+            final bool q2Claimed = (data['dailyQ2RewardClaimed'] is bool)
+                ? data['dailyQ2RewardClaimed'] as bool
+                : (data['dailyQ2RewardClaimed'] == 1);
             final bool q2Done = q2Progress >= q2Goal;
-            final double q2Pct =
-                q2Goal > 0 ? (q2Progress / q2Goal).clamp(0.0, 1.0) : 0.0;
+            final double q2Pct = q2Goal > 0 ? (q2Progress / q2Goal).clamp(0.0, 1.0) : 0.0;
 
             // Quest 3 values (monsters)
-            final int mGoal =
-                (data['dailyMonsterGoal'] ?? _monsterGoal) as int;
-            final int mProgress =
-                (data['dailyMonsterProgress'] ?? 0) as int;
-            final bool mClaimed =
-                (data['dailyMonsterRewardClaimed'] ?? false) as bool;
+            final int mGoal = (data['dailyMonsterGoal'] ?? _monsterGoal) as int;
+            final int mProgress = (data['dailyMonsterProgress'] ?? 0) as int;
+            final bool mClaimed = (data['dailyMonsterRewardClaimed'] is bool)
+                ? data['dailyMonsterRewardClaimed'] as bool
+                : (data['dailyMonsterRewardClaimed'] == 1);
             final bool mDone = mProgress >= mGoal;
-            final double mPct =
-                mGoal > 0 ? (mProgress / mGoal).clamp(0.0, 1.0) : 0.0;
+            final double mPct = mGoal > 0 ? (mProgress / mGoal).clamp(0.0, 1.0) : 0.0;
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -169,10 +167,7 @@ class _DailyQuestScreenState extends State<DailyQuestScreen> {
                   percent: mPct,
                   completed: mDone,
                   claimed: mClaimed,
-                  onClaim: () => _claimReward(
-                    _monsterReward,
-                    'dailyMonsterRewardClaimed',
-                  ),
+                  onClaim: () => _claimReward(_monsterReward, 'dailyMonsterRewardClaimed'),
                 ),
 
                 const Spacer(),
@@ -193,8 +188,11 @@ class _DailyQuestScreenState extends State<DailyQuestScreen> {
   // Helper to claim XP for any quest
   Future<void> _claimReward(int xpAmount, String claimedField) async {
     try {
+      // Award XP and handle level-ups
+      await widget.characterRef.awardXpAndMaybeLevelUp(xpAmount);
+
+      // Mark this quest as claimed (boolean)
       await widget.characterRef.set({
-        'xp': FieldValue.increment(xpAmount),
         claimedField: true,
       }, SetOptions(merge: true));
 
