@@ -6,12 +6,14 @@ import 'utils/leveling.dart'; // our leveling utility
 /// --------------------------------------
 /// BATTLE & ENCOUNTER SYSTEM
 /// --------------------------------------
-/// - One enemy ("Slime") with 100 HP.
-/// - "Attack" button deals 20 damage.
-/// - When HP <= 0:
-///     * Enemy is "defeated"
-///     * Character gains +20 XP in Firestore
-///     * Enemy HP resets to 100
+/// 5-monster progression:
+/// 1) Slime   - lowest HP / reward
+/// 2) Goblin
+/// 3) Zombies
+/// 4) Witch
+/// 5) Dragon  - highest HP / reward
+/// After defeating one monster, you move to the next.
+/// After Dragon, it loops back to Slime.
 
 class BattleScreen extends StatefulWidget {
   final DocumentReference<Map<String, dynamic>> characterRef;
@@ -23,16 +25,55 @@ class BattleScreen extends StatefulWidget {
 }
 
 class _BattleScreenState extends State<BattleScreen> {
-  int enemyHp = 100;
-  final int enemyMaxHp = 100;
-  final int damagePerHit = 20;
-  final int xpReward = 20;
-  final String enemyName = 'Slime';
-  bool isAttacking = false;
+  final List<_Monster> _monsters = [
+    _Monster(
+      name: 'Slime',
+      assetPath: 'lib/assets/images/slime.png',
+      maxHp: 200,
+      xpReward: 20,
+    ),
+    _Monster(
+      name: 'Goblin',
+      assetPath: 'lib/assets/images/goblin.png',
+      maxHp: 350,
+      xpReward: 30,
+    ),
+    _Monster(
+      name: 'Zombies',
+      assetPath: 'lib/assets/images/zombies.png',
+      maxHp: 500,
+      xpReward: 40,
+    ),
+    _Monster(
+      name: 'Witch',
+      assetPath: 'lib/assets/images/witch.png',
+      maxHp: 750,
+      xpReward: 55,
+    ),
+    _Monster(
+      name: 'Dragon',
+      assetPath: 'lib/assets/images/dragon.png',
+      maxHp: 1000,
+      xpReward: 80,
+    ),
+  ];
+
+  int _currentMonsterIndex = 0;
+  late int _enemyHp;
+
+  final int _damagePerHit = 20;
+  bool _isAttacking = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _enemyHp = _monsters[_currentMonsterIndex].maxHp;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final double hpPercent = enemyHp / enemyMaxHp;
+    final monster = _monsters[_currentMonsterIndex];
+    final double hpPercent = _enemyHp / monster.maxHp;
 
     return Scaffold(
       appBar: AppBar(
@@ -43,53 +84,77 @@ class _BattleScreenState extends State<BattleScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Enemy: $enemyName',
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
+            // Enemy card
+            Card(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
               ),
-            ),
-            const SizedBox(height: 8),
-            Center(
-              child: Image.asset(
-                'lib/assets/images/slime.png',
-                height: 150,
-              ),
-            ),
-            const SizedBox(height: 16),
+              elevation: 3,
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Enemy: ${monster.name}',
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
 
-            // Enemy HP bar
-            LinearProgressIndicator(
-              value: hpPercent.clamp(0.0, 1.0),
-              minHeight: 16,
+                    Center(
+                      child: Image.asset(
+                        monster.assetPath,
+                        height: 150,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+                    LinearProgressIndicator(
+                      value: hpPercent.clamp(0.0, 1.0),
+                      minHeight: 16,
+                    ),
+                    const SizedBox(height: 4),
+                    Text('HP: $_enemyHp / ${monster.maxHp}'),
+                    const SizedBox(height: 4),
+                    Text('Reward: ${monster.xpReward} XP'),
+                  ],
+                ),
+              ),
             ),
-            const SizedBox(height: 4),
-            Text('HP: $enemyHp / $enemyMaxHp'),
+
             const SizedBox(height: 24),
 
             // Battle instructions
             const Text(
-              'Tap "Attack" to damage the enemy.\nDefeating the enemy gives +20 XP.',
+              'Tap "Attack" to damage the enemy.\n'
+              'Defeating stronger monsters gives more XP.',
             ),
+
             const Spacer(),
 
             // Attack button
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: isAttacking
+                onPressed: _isAttacking
                     ? null
                     : () async {
                         // Deal damage to the enemy
                         setState(() {
-                          enemyHp -= damagePerHit;
-                          if (enemyHp < 0) enemyHp = 0;
-                          isAttacking = true;
+                          _enemyHp -= _damagePerHit;
+                          if (_enemyHp < 0) _enemyHp = 0;
+                          _isAttacking = true;
                         });
 
-                        // If enemy is defeated → award XP
-                        if (enemyHp <= 0) {
+                        // If defeated → add XP
+                        if (_enemyHp <= 0) {
+                          final defeatedMonster = _monsters[_currentMonsterIndex];
+                          final int xpReward = defeatedMonster.xpReward;
+
                           try {
                             // Use leveling.dart to award XP and handle level-ups
                             final result = await widget.characterRef
@@ -104,16 +169,18 @@ class _BattleScreenState extends State<BattleScreen> {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: Text(
-                                    '$enemyName defeated! +$xpReward XP'
-                                    '${leveled ? ' and leveled up!' : ''}',
+                                    '${monster.name} defeated! +$xpReward XP gained.',
                                   ),
                                 ),
                               );
                             }
 
-                            // Reset enemy HP for next battle
+                            // Move to next monster and reset HP
                             setState(() {
-                              enemyHp = enemyMaxHp;
+                              _currentMonsterIndex =
+                                  (_currentMonsterIndex + 1) % _monsters.length;
+                              _enemyHp =
+                                  _monsters[_currentMonsterIndex].maxHp;
                             });
                           } catch (e) {
                             if (mounted) {
@@ -125,11 +192,17 @@ class _BattleScreenState extends State<BattleScreen> {
                         }
 
                         if (mounted) {
-                          setState(() => isAttacking = false);
+                          setState(() => _isAttacking = false);
                         }
                       },
                 child: const Text('Attack (-20 HP)'),
               ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Each defeated monster can also count toward your\n'
+              '“Defeat 5 monsters” daily quest.',
+              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
           ],
@@ -137,4 +210,18 @@ class _BattleScreenState extends State<BattleScreen> {
       ),
     );
   }
+}
+
+class _Monster {
+  final String name;
+  final String assetPath;
+  final int maxHp;
+  final int xpReward;
+
+  const _Monster({
+    required this.name,
+    required this.assetPath,
+    required this.maxHp,
+    required this.xpReward,
+  });
 }
