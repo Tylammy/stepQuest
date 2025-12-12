@@ -1,5 +1,7 @@
+// lib/battle_screen.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'utils/leveling.dart'; // our leveling utility
 
 /// --------------------------------------
 /// BATTLE & ENCOUNTER SYSTEM
@@ -125,6 +127,8 @@ class _BattleScreenState extends State<BattleScreen> {
             ),
 
             const SizedBox(height: 24),
+
+            // Battle instructions
             const Text(
               'Tap "Attack" to damage the enemy.\n'
               'Defeating stronger monsters gives more XP.',
@@ -132,13 +136,14 @@ class _BattleScreenState extends State<BattleScreen> {
 
             const Spacer(),
 
+            // Attack button
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: _isAttacking
                     ? null
                     : () async {
-                        // Deal damage
+                        // Deal damage to the enemy
                         setState(() {
                           _enemyHp -= _damagePerHit;
                           if (_enemyHp < 0) _enemyHp = 0;
@@ -151,12 +156,14 @@ class _BattleScreenState extends State<BattleScreen> {
                           final int xpReward = defeatedMonster.xpReward;
 
                           try {
-                            await widget.characterRef.set(
-                              {'xp': FieldValue.increment(xpReward),
-                              // Progress for Quest 3 (defeat 5 monsters)
-                              'dailyMonsterProgress': FieldValue.increment(1),},
-                              SetOptions(merge: true),
+                            // Use leveling.dart to award XP and handle level-ups
+                            final result = await widget.characterRef
+                                .awardXpAndMaybeLevelUp(
+                              xpReward,
+                              increments: {'dailyMonsterProgress': 1},
                             );
+
+                            final leveled = result['leveled'] as bool;
 
                             if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
@@ -178,9 +185,7 @@ class _BattleScreenState extends State<BattleScreen> {
                           } catch (e) {
                             if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text("Error: $e"),
-                                ),
+                                SnackBar(content: Text('Error: $e')),
                               );
                             }
                           }
